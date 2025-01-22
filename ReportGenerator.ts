@@ -1,53 +1,69 @@
+/**
+ * Purpose of the Code:
+ * - This code helps generate different types of reports (text, Excel, and JSON) for 5S and Hazard assessments.
+ * - It organizes data about scores, observations, and recommendations into user-friendly formats.
+ * - Makes it easy to store, share, and review the assessment information.
+ * - Handles:
+ *   - Text report generation for easy reading.
+ *   - Excel report creation for structured data analysis.
+ *   - JSON report saving for further programmatic processing.
+ */
+
 import fs from 'fs';
 import path from 'path';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 
+// Describes the structure of the assessment data
 interface Assessment {
-    timestamp: string;
-    totalScore: number;
+    timestamp: string; // When the assessment was done
+    totalScore: number; // Overall score out of 100
     scores: {
-        "5s": Record<string, { score: number; observations: string }>;
-        safety: Record<string, { score: number; observations: string }>;
+        "5s": Record<string, { score: number; observations: string }>; // 5S scores and notes
+        hazard: Record<string, { score: number; observations: string }>; // Hazard scores and notes
     };
-    positiveFindings?: string[];
-    areasOfConcern?: string[];
-    safetyHazards?: string[];
+    positiveFindings?: string[]; // List of good things observed
+    areasOfConcern?: string[]; // List of issues found
+    criticalHazards?: string[]; // Critical problems
     recommendations: {
-        immediate?: string[];
-        shortTerm?: string[];
-        longTerm?: string[];
+        immediate?: string[]; // Actions to do right away
+        shortTerm?: string[]; // Actions to do in 1-2 weeks
+        longTerm?: string[]; // Actions to do in 1-3 months
     };
 }
 
+// Describes the structure of the area being assessed
 interface Area {
-    name: string;
-    imagePath: string;
-    department?: string;
-    assessedBy?: string;
+    name: string; // Name of the area
+    imagePath: string; // Path to an image of the area
+    department?: string; // Name of the department
+    assessedBy?: string; // Name of the person who did the assessment
 }
 
 class ReportGenerator {
-    private outputDir: string;
+    private outputDir: string; // Folder to save the reports
 
     constructor(outputDir = "data/reports") {
         this.outputDir = path.resolve(outputDir);
         if (!fs.existsSync(this.outputDir)) {
-            fs.mkdirSync(this.outputDir, { recursive: true });
+            fs.mkdirSync(this.outputDir, { recursive: true }); // Create the folder if it doesn't exist
         }
     }
 
+    // Get the current date and time in a specific format for filenames
     private getTimestamp(): string {
         return format(new Date(), 'yyyyMMdd_HHmmss');
     }
 
+    // Create a text report
     public createTextReport(assessment: Assessment, area: Area): string {
         const timestamp = this.getTimestamp();
         const filename = path.join(this.outputDir, `5S_Assessment_${area.name}_${timestamp}.txt`);
 
         const lines: string[] = [];
 
-        lines.push("5S and Safety Assessment Report");
+        // Add header information
+        lines.push("5S and Hazard Assessment Report");
         lines.push("==============================\n");
         lines.push(`Area: ${area.name}`);
         lines.push(`Date: ${assessment.timestamp}`);
@@ -65,10 +81,10 @@ class ReportGenerator {
             lines.push(`Observations: ${data.observations}\n`);
         }
 
-        // Add Safety Components
-        lines.push("\nSafety Components (40 points):");
+        // Add Hazard Components
+        lines.push("\nHazard Components (40 points):");
         lines.push("-".repeat(40));
-        for (const [category, data] of Object.entries(assessment.scores.safety)) {
+        for (const [category, data] of Object.entries(assessment.scores.hazard)) {
             lines.push(`${category.replace('_', ' ')}: ${data.score}/10 points`);
             lines.push(`Observations: ${data.observations}\n`);
         }
@@ -87,11 +103,11 @@ class ReportGenerator {
             assessment.areasOfConcern.forEach(concern => lines.push(`• ${concern}`));
         }
 
-        // Safety Hazards
-        if (assessment.safetyHazards?.length) {
-            lines.push("\nCRITICAL SAFETY HAZARDS:");
+        // Critical Hazards
+        if (assessment.criticalHazards?.length) {
+            lines.push("\nCRITICAL HAZARDS:");
             lines.push("-".repeat(40));
-            assessment.safetyHazards.forEach(hazard => lines.push(`! ${hazard}`));
+            assessment.criticalHazards.forEach(hazard => lines.push(`! ${hazard}`));
         }
 
         // Recommendations
@@ -117,6 +133,7 @@ class ReportGenerator {
         return filename;
     }
 
+    // Create an Excel report
     public createExcelReport(assessment: Assessment, area: Area): string {
         const timestamp = this.getTimestamp();
         const filename = path.join(this.outputDir, `5S_Assessment_${area.name}_${timestamp}.xlsx`);
@@ -130,8 +147,8 @@ class ReportGenerator {
                 MaxScore: 12,
                 Observations: data.observations,
             })),
-            ...Object.entries(assessment.scores.safety).map(([category, data]) => ({
-                Component: "Safety",
+            ...Object.entries(assessment.scores.hazard).map(([category, data]) => ({
+                Component: "Hazard",
                 Category: category,
                 Score: data.score,
                 MaxScore: 10,
@@ -141,11 +158,11 @@ class ReportGenerator {
 
         // Prepare findings and recommendations
         const findings = {
-            Category: ["Positive Findings", "Areas of Concern", "Safety Hazards"],
+            Category: ["Positive Findings", "Areas of Concern", "Critical Hazards"],
             Items: [
                 assessment.positiveFindings?.join("\n") || "",
                 assessment.areasOfConcern?.join("\n") || "",
-                assessment.safetyHazards?.join("\n") || "",
+                assessment.criticalHazards?.join("\n") || "",
             ],
         };
 
@@ -175,6 +192,7 @@ class ReportGenerator {
         return filename;
     }
 
+    // Save the assessment data in JSON format
     public saveJsonData(assessment: Assessment, area: Area): string {
         const timestamp = this.getTimestamp();
         const filename = path.join(this.outputDir, `5S_Assessment_${area.name}_${timestamp}.json`);
@@ -188,6 +206,7 @@ class ReportGenerator {
         return filename;
     }
 
+    // Generate all report formats (text, Excel, JSON)
     public batchExport(assessment: Assessment, area: Area): Record<string, string> {
         return {
             text: this.createTextReport(assessment, area),
